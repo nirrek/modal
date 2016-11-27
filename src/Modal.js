@@ -2,6 +2,7 @@ import React from 'react';
 import { render, unmountComponentAtNode } from 'react-dom';
 import { StyleSheet, css } from 'aphrodite';
 import { curry } from 'ramda';
+import AnimateEntryAndExit from './AnimateEntryAndExit.js';
 
 const hasAncestor = curry((ancestor, node) => {
   while (node) {
@@ -31,11 +32,24 @@ const fadeInKeyframes = {
 };
 
 const scaleInKeyframes = {
-  '0%': { transform: 'scale(0.2)' },
+  '0%': { transform: 'scale(0.8)' },
   '100%': { transform: 'scale(1)' },
 }
 
+const fadeOutKeyframes = {
+  '0%': { opacity: 1 },
+  '100%': { opacity: 0 },
+};
+
+const scaleOutKeyframes = {
+  '0%': { transform: 'scale(1)' },
+  '100%': { transform: 'scale(0.8)' },
+}
+
 const styles = StyleSheet.create({
+  preventScroll: {
+    overflow: 'hidden',
+  },
   overlay: {
     position: 'fixed',
     top: 0,
@@ -43,17 +57,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  overlayEnter: {
     animationName: fadeInKeyframes,
     animationDuration: '300ms',
+    animationFillMode: 'forwards',
+    animationTimingFunction: 'ease-out',
+  },
+  overlayExit: {
+    animationName: fadeOutKeyframes,
+    animationDuration: '300ms',
+    animationFillMode: 'forwards',
+    animationTimingFunction: 'ease-out',
   },
   box: {
     backgroundColor: '#fff',
     borderRadius: 2,
-    boxShadow: '0 15px 45px rgba(0,0,0, .2), 0 5px 15px rgba(0,0,0, .3)',
+    // boxShadow: '0 15px 45px rgba(0,0,0, .2), 0 5px 15px rgba(0,0,0, .3)',
     maxWidth: 768,
     margin: '0 auto',
+  },
+  boxEnter: {
     animationName: [fadeInKeyframes, scaleInKeyframes],
     animationDuration: '300ms',
+    animationFillMode: 'forwards',
+    animationTimingFunction: 'ease-out',
+  },
+  boxExit: {
+    animationName: [fadeOutKeyframes, scaleOutKeyframes],
+    animationDuration: '300ms',
+    animationFillMode: 'forwards',
+    animationTimingFunction: 'ease-out',
   },
   scrollingContainer: {
     overflowY: 'auto',
@@ -92,7 +126,7 @@ export default class ModalPortal extends React.Component {
 
   componentWillReceiveProps(nextProps) {
     if      (nextProps.isOpen && !this.props.isOpen) this.openModal(nextProps);
-    else if (!nextProps.isOpen && this.props.isOpen) this.closeModal();
+    else if (!nextProps.isOpen && this.props.isOpen) this.closeModal(nextProps);
     else                                             this.updateModal(nextProps);
   }
 
@@ -106,11 +140,20 @@ export default class ModalPortal extends React.Component {
     // portalNode.classList.add(css(styles.overlay));
     this.renderModalIntoPortal(portalNode, props);
     document.body.appendChild(portalNode);
+    // This is for legacy Mathspace. It forces scroll on <html> instead of <body>
+    document.body.parentElement.classList.add(css(styles.preventScroll));
+    document.body.classList.add(css(styles.preventScroll));
   }
 
-  closeModal = () => {
-    unmountComponentAtNode(this.portalNode)
-    document.body.removeChild(this.portalNode);
+  closeModal = (props) => {
+    this.updateModal(props);
+    window.setTimeout(() => {
+      unmountComponentAtNode(this.portalNode)
+      document.body.removeChild(this.portalNode);
+      // This is for legacy Mathspace. It forces scroll on <html> instead of <body>
+      document.body.parentElement.classList.remove(css(styles.preventScroll));
+      document.body.classList.remove(css(styles.preventScroll));
+    }, 300); // hard-binding to animation duration in Modal
   }
 
   updateModal = (props) => {
@@ -125,35 +168,6 @@ export default class ModalPortal extends React.Component {
 class Modal extends React.Component {
   componentDidMount() {
     document.addEventListener('keydown', this.handleKeyDown);
-
-    // DOMMouseScroll is fired in Firefox
-    // mousewheel is fired in Chrome, Safari
-    // touchmove is fired on mobile devices
-    // No idea what 'scroll' is fired on though
-    for (const event of ['mousewheel', 'DOMMouseScroll', 'touchmove', 'scroll']) {
-      document.body.addEventListener(event, e => {
-        console.log('body event', e);
-      });
-
-      document.addEventListener(event, e => {
-        console.log('document event', e);
-      })
-
-      // document.body.addEventListener(event, (e) => {
-      //   console.log(event, e.target.id, e);
-      //
-      //   console.log('will scroll modal?', willScrollElement(e.deltaY, this.modal));
-      //
-      //   if (!willScrollElement(e.deltaY, this.modal)) {
-      //     e.preventDefault();
-      //   }
-      //
-      //   // if (!hasAncestor(this.modal, e.target)) {
-      //   //   e.preventDefault();
-      //   //   e.stopPropagation();
-      //   // }
-      // });
-    }
   }
 
   componentWillUnmount() {
@@ -175,19 +189,34 @@ class Modal extends React.Component {
 
   render() {
     return (
-      <div className={css(styles.overlay)} onClick={this.handleClick}>
-        <div className={css(styles.scrollingContainer)}>
-          <div id='modal'
-            ref={node => { this.modal = node; }}
-            className={css(styles.box)}
-          >
-            {this.props.title && (
-              <div className={css(styles.modalTitle)}>{this.props.title}</div>
+      <AnimateEntryAndExit show={this.props.isOpen} enterDuration={300} exitDuration={300}>
+        {(isEntering, isExiting) => (
+          <div
+            className={css(
+              styles.overlay,
+              isEntering && styles.overlayEnter,
+              isExiting && styles.overlayExit,
             )}
-            {this.props.children}
+            onClick={this.handleClick}
+          >
+            <div className={css(styles.scrollingContainer)}>
+              <div id='modal'
+                ref={node => { this.modal = node; }}
+                className={css(
+                  styles.box,
+                  isEntering && styles.boxEnter,
+                  isExiting && styles.boxExit,
+                )}
+              >
+                {this.props.title && (
+                  <div className={css(styles.modalTitle)}>{this.props.title}</div>
+                )}
+                {this.props.children}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      </AnimateEntryAndExit>
     )
   }
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import ModalPortal, { ModalBody, ModalFooter } from './Modal.js';
 import { range, map } from 'ramda';
+import AnimTest from './AnimTest.js';
 
 export default class App extends React.Component {
   state = {
@@ -37,7 +38,10 @@ export default class App extends React.Component {
 
   render() {
     return (
-      <div style={{ height: 3000 }}>
+      <div
+        style={{ height: 3000 }}
+      >
+        {/* <AnimTest /> */}
         <button onClick={this.toggleModal}>Toggle Modal</button>
         <button onClick={this.addModal}>Add Modal</button>
 
@@ -47,6 +51,14 @@ export default class App extends React.Component {
           onClose={() => this.setState({ isOpen: false })}
         >
           <ModalBody>
+            <div style={{height: 100, overflowY: 'scroll' }}>
+              {range(0, 20).map((val) => (
+                <div key={val}>
+                  This is a custom one by itself. This is a custom one by itself
+                  <input type="text" />
+                </div>
+              ))}
+            </div>
             {range(0, 50).map((val) => (
               <div key={val}>
                 This is a custom one by itself. This is a custom one by itself
